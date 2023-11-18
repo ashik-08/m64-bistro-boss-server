@@ -85,6 +85,21 @@ async function run() {
       }
     });
 
+    // delete a cart item from collection
+    app.delete("/carts/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await cartsCollection.deleteOne(query, {
+          writeConcern: { w: "majority" },
+        });
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
