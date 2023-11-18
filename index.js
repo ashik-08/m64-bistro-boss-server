@@ -32,8 +32,9 @@ async function run() {
     const database = client.db("bistro-boss");
     const menuCollection = database.collection("menu");
     const reviewsCollection = database.collection("reviews");
+    const cartsCollection = database.collection("carts");
 
-    // get menu
+    // get menu collection
     app.get("/menu", async (req, res) => {
       try {
         const result = await menuCollection.find().toArray();
@@ -44,10 +45,39 @@ async function run() {
       }
     });
 
-    // get reviews
+    // get reviews collection
     app.get("/reviews", async (req, res) => {
       try {
         const result = await reviewsCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // get carts collection
+    app.get("/carts", async (req, res) => {
+      try {
+        const email = req.query.email;
+        const query = { email: email };
+        const result = await cartsCollection.find(query).toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // post new item to carts collection
+    app.post("/carts", async (req, res) => {
+      try {
+        const cartItem = req.body;
+        console.log(cartItem);
+        const result = await cartsCollection.insertOne(cartItem, {
+          writeConcern: { w: "majority" },
+        });
+        console.log(result);
         res.send(result);
       } catch (error) {
         console.log(error);
