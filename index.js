@@ -30,9 +30,31 @@ async function run() {
 
     // connect to the database & access it's collections
     const database = client.db("bistro-boss");
+    const usersCollection = database.collection("users");
     const menuCollection = database.collection("menu");
     const reviewsCollection = database.collection("reviews");
     const cartsCollection = database.collection("carts");
+
+    // add a user to collection
+    app.post("/users", async (req, res) => {
+      try {
+        const user = req.body;
+        // query to find all users in the collection
+        const query = { email: user.email };
+        // check if there already exist an user
+        const isExist = await usersCollection.findOne(query);
+        if (isExist) {
+          return res.send({ message: "Already exists" });
+        }
+        const result = await usersCollection.insertOne(user, {
+          writeConcern: { w: "majority" },
+        });
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
 
     // get menu collection
     app.get("/menu", async (req, res) => {
