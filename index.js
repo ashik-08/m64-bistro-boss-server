@@ -145,9 +145,7 @@ async function run() {
         if (isExist) {
           return res.send({ message: "Already exists" });
         }
-        const result = await usersCollection.insertOne(user, {
-          writeConcern: { w: "majority" },
-        });
+        const result = await usersCollection.insertOne(user);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -165,9 +163,7 @@ async function run() {
             role: "admin",
           },
         };
-        const result = await usersCollection.updateOne(query, updatedUser, {
-          writeConcern: { w: "majority" },
-        });
+        const result = await usersCollection.updateOne(query, updatedUser);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -180,9 +176,7 @@ async function run() {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
-        const result = await usersCollection.deleteOne(query, {
-          writeConcern: { w: "majority" },
-        });
+        const result = await usersCollection.deleteOne(query);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -194,6 +188,30 @@ async function run() {
     app.get("/menu", async (req, res) => {
       try {
         const result = await menuCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // post to menu collection
+    app.post("/menu", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const menuItem = req.body;
+        // query to find all menu item in the collection
+        const query = await menuCollection.find().toArray();
+        // check if this item already exist
+        const found = query.find(
+          (search) =>
+            search.name === menuItem.name &&
+            search.category === menuItem.category &&
+            search.price === menuItem.price
+        );
+        if (found) {
+          return res.send({ message: "Already exists" });
+        }
+        const result = await menuCollection.insertOne(menuItem);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -229,9 +247,7 @@ async function run() {
     app.post("/carts", async (req, res) => {
       try {
         const cartItem = req.body;
-        const result = await cartsCollection.insertOne(cartItem, {
-          writeConcern: { w: "majority" },
-        });
+        const result = await cartsCollection.insertOne(cartItem);
         res.send(result);
       } catch (error) {
         console.log(error);
@@ -244,9 +260,7 @@ async function run() {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
-        const result = await cartsCollection.deleteOne(query, {
-          writeConcern: { w: "majority" },
-        });
+        const result = await cartsCollection.deleteOne(query);
         res.send(result);
       } catch (error) {
         console.log(error);
