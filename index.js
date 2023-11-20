@@ -1,6 +1,7 @@
 const express = require("express");
 const app = express();
 const cors = require("cors");
+const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
@@ -35,6 +36,104 @@ async function run() {
     const reviewsCollection = database.collection("reviews");
     const cartsCollection = database.collection("carts");
 
+    // jwt auth related api
+    app.post("/jwt", async (req, res) => {
+      try {
+        const user = req.body;
+        console.log("from /jwt -- user:", user);
+        const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+          expiresIn: "2h",
+        });
+        console.log("from /jwt -- token:", token);
+        res.send({ token });
+        // res
+        //   .cookie("token", token, {
+        //     httpOnly: true,
+        //     secure: process.env.NODE_ENV === "production" ? true : false,
+        //     sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+        //   })
+        //   .send({ success: true });
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // token middleware function
+    const verifyToken = async (req, res, next) => {
+      try {
+        console.log("Value of token in middleware: ", req.headers);
+        if (!req.headers.authorization) {
+          return res
+            .status(401)
+            .send({ auth: false, message: "Not authorized" });
+        }
+        const token = req.headers.authorization.split(" ")[1];
+        jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+          // error
+          if (err) {
+            console.log(err);
+            return res.status(401).send({ message: "Unauthorized" });
+          }
+          // if token is valid then it would be decoded
+          console.log("Value in the token: ", decoded);
+          req.decoded = decoded;
+          next();
+        });
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    };
+
+    // use verify admin after verifyToken
+    const verifyAdmin = async (req, res, next) => {
+      try {
+        const email = req.decoded.email;
+        const query = { email: email };
+        const user = await usersCollection.findOne(query);
+        const isAdmin = user?.role === "admin";
+        if (!isAdmin) {
+          return res.status(403).send({ message: "Forbidden" });
+        }
+        next();
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    };
+
+    // get user from user collection
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const result = await usersCollection.find().toArray();
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // get user role from user collection
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
+      try {
+        const email = req.params.email;
+        if (email !== req.decoded?.email) {
+          return res.status(403).send({ message: "Forbidden" });
+        }
+        const query = { email: email };
+        const user = await usersCollection.findOne(query);
+        let admin = false;
+        if (user?.role === "admin") {
+          admin = true;
+        }
+        res.send({ admin });
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
     // add a user to collection
     app.post("/users", async (req, res) => {
       try {
@@ -47,6 +146,41 @@ async function run() {
           return res.send({ message: "Already exists" });
         }
         const result = await usersCollection.insertOne(user, {
+          writeConcern: { w: "majority" },
+        });
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // update a user role
+    app.patch("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updatedUser = {
+          $set: {
+            role: "admin",
+          },
+        };
+        const result = await usersCollection.updateOne(query, updatedUser, {
+          writeConcern: { w: "majority" },
+        });
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // delete a user from collection
+    app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await usersCollection.deleteOne(query, {
           writeConcern: { w: "majority" },
         });
         res.send(result);
@@ -95,11 +229,9 @@ async function run() {
     app.post("/carts", async (req, res) => {
       try {
         const cartItem = req.body;
-        console.log(cartItem);
         const result = await cartsCollection.insertOne(cartItem, {
           writeConcern: { w: "majority" },
         });
-        console.log(result);
         res.send(result);
       } catch (error) {
         console.log(error);
