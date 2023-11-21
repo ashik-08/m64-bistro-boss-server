@@ -195,6 +195,19 @@ async function run() {
       }
     });
 
+    // get single menu item
+    app.get("/menu/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await menuCollection.findOne(query);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
     // post to menu collection
     app.post("/menu", verifyToken, verifyAdmin, async (req, res) => {
       try {
@@ -212,6 +225,28 @@ async function run() {
           return res.send({ message: "Already exists" });
         }
         const result = await menuCollection.insertOne(menuItem);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // update food item to db from Update Item
+    app.patch("/menu/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const filter = { _id: new ObjectId(id) };
+        const updateQuery = {
+          $set: {
+            name: req.body.name,
+            recipe: req.body.recipe,
+            image: req.body.image,
+            category: req.body.category,
+            price: req.body.price,
+          },
+        };
+        const result = await menuCollection.updateOne(filter, updateQuery);
         res.send(result);
       } catch (error) {
         console.log(error);
