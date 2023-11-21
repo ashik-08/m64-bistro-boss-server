@@ -219,6 +219,19 @@ async function run() {
       }
     });
 
+    // delete a menu item from collection
+    app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await menuCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
     // get reviews collection
     app.get("/reviews", async (req, res) => {
       try {
