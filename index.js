@@ -235,7 +235,7 @@ async function run() {
     });
 
     // update food item to db from Update Item
-    app.patch("/menu/:id", async (req, res) => {
+    app.patch("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const filter = { _id: new ObjectId(id) };
@@ -281,7 +281,7 @@ async function run() {
     });
 
     // get carts collection
-    app.get("/carts", async (req, res) => {
+    app.get("/carts", verifyToken, async (req, res) => {
       try {
         const email = req.query.email;
         const query = { email: email };
@@ -294,7 +294,7 @@ async function run() {
     });
 
     // post new item to carts collection
-    app.post("/carts", async (req, res) => {
+    app.post("/carts", verifyToken, async (req, res) => {
       try {
         const cartItem = req.body;
         const result = await cartsCollection.insertOne(cartItem);
@@ -306,7 +306,7 @@ async function run() {
     });
 
     // delete a cart item from collection
-    app.delete("/carts/:id", async (req, res) => {
+    app.delete("/carts/:id", verifyToken, async (req, res) => {
       try {
         const id = req.params.id;
         const query = { _id: new ObjectId(id) };
@@ -319,7 +319,7 @@ async function run() {
     });
 
     // payment intent
-    app.post("/create-payment-intent", async (req, res) => {
+    app.post("/create-payment-intent", verifyToken, async (req, res) => {
       try {
         const { price } = req.body;
         console.log(price);
@@ -361,7 +361,7 @@ async function run() {
     });
 
     // post payment information to collection
-    app.post("/payments", async (req, res) => {
+    app.post("/payments", verifyToken, async (req, res) => {
       try {
         const payment = req.body;
         const paymentResult = await paymentsCollection.insertOne(payment);
@@ -371,6 +371,90 @@ async function run() {
         };
         const deleteResult = await cartsCollection.deleteMany(query);
         res.send({ paymentResult, deleteResult });
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // using aggregate pipeline
+    // admin dashboard
+    app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        const query = { role: { $ne: "admin" } };
+        const customers = await usersCollection.countDocuments(query);
+        const products = await menuCollection.estimatedDocumentCount();
+        const orders = await paymentsCollection.estimatedDocumentCount();
+        const result = await paymentsCollection
+          .aggregate([
+            {
+              $group: {
+                _id: null,
+                totalRevenue: {
+                  $sum: "$amount",
+                },
+              },
+            },
+          ])
+          .toArray();
+        const totalRevenue = result[0]?.totalRevenue || 0;
+        res.send({ customers, products, orders, totalRevenue });
+      } catch (error) {
+        console.log(error);
+        return res.send({ error: true, message: error.message });
+      }
+    });
+
+    // for graphs and charts
+    app.get("/order-stats", verifyToken, verifyAdmin, async (req, res) => {
+      try {
+        // const id =
+        const result = await paymentsCollection
+          .aggregate([
+            {
+              $unwind: "$menuIds",
+            },
+            {
+              $lookup: {
+                from: "menu",
+                let: { menuId: { $toObjectId: "$menuIds" } },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $eq: ["$_id", "$$menuId"],
+                      },
+                    },
+                  },
+                ],
+                as: "menuItem",
+              },
+            },
+            {
+              $unwind: "$menuItem",
+            },
+            {
+              $group: {
+                _id: "$menuItem.category",
+                quantity: {
+                  $sum: 1,
+                },
+                revenue: {
+                  $sum: "$menuItem.price",
+                },
+              },
+            },
+            {
+              $project: {
+                _id: 0,
+                category: "$_id",
+                quantity: 1,
+                revenue: 1,
+              },
+            },
+          ])
+          .toArray();
+        res.send(result);
       } catch (error) {
         console.log(error);
         return res.send({ error: true, message: error.message });
